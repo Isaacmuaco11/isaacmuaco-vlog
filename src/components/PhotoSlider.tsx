@@ -29,7 +29,7 @@ const PhotoSlider = () => {
   if (photos.length === 0) return null;
 
   return (
-    <div className="relative w-full aspect-video overflow-hidden rounded-xl bg-black/10">
+    <div className="relative w-full aspect-square overflow-hidden rounded-2xl bg-zinc-800">
       <div
         className="flex transition-transform duration-500 ease-out h-full"
         style={{ transform: `translateX(-${currentIndex * 100}%)` }}
@@ -42,7 +42,7 @@ const PhotoSlider = () => {
             <img
               src={photo}
               alt={`Foto ${index + 1}`}
-              className="max-w-full max-h-full object-contain"
+              className="w-full h-full object-cover"
             />
           </div>
         ))}
@@ -52,24 +52,24 @@ const PhotoSlider = () => {
         <>
           <button
             onClick={goToPrevious}
-            className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors"
+            className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-black/60 text-white rounded-full hover:bg-black/80 transition-colors"
           >
-            <ChevronLeft className="w-6 h-6" />
+            <ChevronLeft className="w-5 h-5" />
           </button>
           <button
             onClick={goToNext}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors"
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-black/60 text-white rounded-full hover:bg-black/80 transition-colors"
           >
-            <ChevronRight className="w-6 h-6" />
+            <ChevronRight className="w-5 h-5" />
           </button>
 
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
             {photos.map((_, index) => (
               <button
                 key={index}
                 onClick={() => setCurrentIndex(index)}
-                className={`w-2 h-2 rounded-full transition-colors ${
-                  index === currentIndex ? "bg-white" : "bg-white/50"
+                className={`w-1.5 h-1.5 rounded-full transition-colors ${
+                  index === currentIndex ? "bg-white" : "bg-white/40"
                 }`}
               />
             ))}
