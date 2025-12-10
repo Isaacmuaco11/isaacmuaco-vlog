@@ -35,23 +35,23 @@ const Footer = () => {
   ];
 
   return (
-    <footer className="bg-accent-red text-foreground">
+    <footer className="bg-zinc-950 text-white pb-16">
       <div className="px-5 md:px-20 py-12 md:py-16">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-x-12 lg:gap-x-16 items-start">
           {/* Logo Section */}
           <div className="md:col-span-1">
-            <div className="font-serif text-3xl md:text-4xl font-bold italic">
+            <div className="text-2xl font-bold">
               Isaac Muaco
             </div>
-            <p className="text-sm mt-2 text-foreground/70">Vlog</p>
+            <p className="text-sm mt-2 text-zinc-400">Vlog</p>
           </div>
 
           {/* Contactos */}
           <div className="md:col-span-1">
-            <h3 className="footer-header">CONTACTOS</h3>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-4">CONTACTOS</h3>
             <nav className="flex flex-col gap-2">
               {contactInfo.map((info) => (
-                <a key={info.label} href={info.href} className="footer-link">
+                <a key={info.label} href={info.href} className="text-sm text-zinc-300 hover:text-white transition-colors">
                   {info.label}
                 </a>
               ))}
@@ -60,8 +60,8 @@ const Footer = () => {
 
           {/* Redes Sociais */}
           <div className="md:col-span-1">
-            <h3 className="footer-header">REDES SOCIAIS</h3>
-            <nav className="flex flex-wrap gap-4">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-4">REDES SOCIAIS</h3>
+            <nav className="flex flex-wrap gap-3">
               {socialLinks.map((link) => {
                 const IconComponent = link.icon;
                 return (
@@ -70,7 +70,7 @@ const Footer = () => {
                     href={link.href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2 p-3 rounded-full bg-foreground/10 hover:bg-foreground/20 transition-colors"
+                    className="flex items-center gap-2 p-3 rounded-full bg-zinc-800 hover:bg-red-600 transition-colors"
                     title={link.label}
                   >
                     <IconComponent className="w-5 h-5" />
@@ -82,8 +82,8 @@ const Footer = () => {
         </div>
 
         {/* Copyright */}
-        <div className="mt-12 pt-6 border-t border-foreground/20">
-          <p className="text-sm text-center md:text-left uppercase">
+        <div className="mt-12 pt-6 border-t border-zinc-800">
+          <p className="text-sm text-center md:text-left text-zinc-500">
             © 2025 ISAAC MUACO. TODOS OS DIREITOS RESERVADOS.
           </p>
         </div>

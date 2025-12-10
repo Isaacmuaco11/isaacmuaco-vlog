@@ -1,3 +1,4 @@
+import { useState } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import VideoFeed from "@/components/VideoFeed";
@@ -5,41 +6,25 @@ import PhotoSlider from "@/components/PhotoSlider";
 import Sidebar from "@/components/Sidebar";
 
 const Index = () => {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   return (
-    <div className="min-h-screen bg-background">
-      <Sidebar />
-      <Header />
+    <div className="min-h-screen bg-black">
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Header onMenuClick={() => setSidebarOpen(true)} />
 
       <main>
-        {/* Hero Section */}
-        <section className="px-5 md:px-20 pt-12 md:pt-20 pb-8 md:pb-12">
-          <div className="max-w-4xl mx-auto text-center">
-            <h1 className="text-5xl md:text-[100px] font-extrabold uppercase text-center mb-6 leading-[0.9] tracking-[-2px]">
-              ISAAC MUACO
-            </h1>
-            <p className="text-2xl md:text-3xl font-serif italic text-foreground/80 mb-8">
-              Vlog
-            </p>
-          </div>
-        </section>
-
-        {/* Photo Slider */}
-        <section className="px-5 md:px-20 pb-8 md:pb-12">
-          <div className="max-w-2xl mx-auto">
-            <PhotoSlider />
-          </div>
-        </section>
-
-        {/* Video Feed */}
-        <section className="px-5 md:px-20 pb-8 md:pb-12">
-          <div className="max-w-2xl mx-auto">
-            <p className="text-lg md:text-xl leading-relaxed text-foreground/70 text-center mb-6">
-              Deslize para ver os meus vídeos • Clique para curtir ❤️
-            </p>
-            <VideoFeed />
-          </div>
-        </section>
+        {/* Video Feed - Full Screen YouTube Shorts Style */}
+        <VideoFeed />
       </main>
+
+      {/* Photo Slider - Below videos */}
+      <section className="bg-zinc-900 py-8">
+        <div className="max-w-md mx-auto px-4">
+          <h2 className="text-white text-lg font-bold mb-4 text-center">Fotos</h2>
+          <PhotoSlider />
+        </div>
+      </section>
 
       <Footer />
     </div>

@@ -170,20 +170,20 @@ const VideoFeed = () => {
   );
 
   return (
-    <div className="w-full">
+    <div className="w-full bg-black">
       <div
         ref={containerRef}
-        className="snap-y snap-mandatory h-[80vh] overflow-y-scroll scrollbar-hide"
+        className="snap-y snap-mandatory h-[calc(100vh-60px)] overflow-y-scroll scrollbar-hide"
       >
         {videos.map((video, index) => (
           <div
             key={video.id}
-            className="snap-start h-[80vh] flex items-center justify-center bg-black relative"
+            className="snap-start h-[calc(100vh-60px)] flex items-center justify-center bg-black relative"
           >
             <video
               ref={(el) => (videoRefs.current[index] = el)}
               src={video.video_url}
-              className="w-full h-full object-contain cursor-pointer"
+              className="w-full h-full object-cover cursor-pointer"
               loop
               playsInline
               muted
@@ -195,8 +195,9 @@ const VideoFeed = () => {
               <HeartAnimation onComplete={() => setShowHeartAnimation(null)} />
             )}
 
-            {/* Like Button */}
-            <div className="absolute right-4 bottom-20 flex flex-col items-center gap-4">
+            {/* Side Actions - YouTube Shorts Style */}
+            <div className="absolute right-3 bottom-24 flex flex-col items-center gap-6">
+              {/* Like Button */}
               <button
                 onClick={() => handleLike(video.id)}
                 className="flex flex-col items-center gap-1"
@@ -204,41 +205,53 @@ const VideoFeed = () => {
                 <div
                   className={`p-3 rounded-full ${
                     videoStats[video.id]?.userLiked
-                      ? "bg-red-500 text-white"
-                      : "bg-white/20 text-white"
-                  } backdrop-blur-sm transition-colors`}
+                      ? "bg-transparent"
+                      : "bg-transparent"
+                  } transition-colors`}
                 >
                   <Heart
                     className={`w-8 h-8 ${
-                      videoStats[video.id]?.userLiked ? "fill-current" : ""
+                      videoStats[video.id]?.userLiked 
+                        ? "fill-red-500 text-red-500" 
+                        : "text-white"
                     }`}
                   />
                 </div>
-                <span className="text-white text-sm font-bold">
+                <span className="text-white text-xs font-semibold">
                   {videoStats[video.id]?.likes || 0}
                 </span>
               </button>
+
+              {/* Views */}
+              <div className="flex flex-col items-center gap-1">
+                <div className="p-3">
+                  <Eye className="w-8 h-8 text-white" />
+                </div>
+                <span className="text-white text-xs font-semibold">
+                  {videoStats[video.id]?.views || 0}
+                </span>
+              </div>
+            </div>
+
+            {/* Video indicator dots */}
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col gap-1">
+              {videos.map((_, i) => (
+                <div
+                  key={i}
+                  className={`w-1 rounded-full transition-all ${
+                    i === index ? "h-4 bg-white" : "h-1 bg-white/40"
+                  }`}
+                />
+              ))}
             </div>
           </div>
         ))}
       </div>
 
-      {/* Video indicator */}
-      <div className="flex justify-center gap-2 py-4">
-        {videos.map((_, index) => (
-          <div
-            key={index}
-            className={`w-2 h-2 rounded-full transition-colors ${
-              index === currentIndex ? "bg-primary" : "bg-foreground/30"
-            }`}
-          />
-        ))}
-      </div>
-
-      {/* Total views */}
-      <div className="flex justify-center items-center gap-2 py-2 text-muted-foreground">
-        <Eye className="w-5 h-5" />
-        <span className="text-sm font-medium">{totalViews} visualizações</span>
+      {/* Total views footer */}
+      <div className="fixed bottom-0 left-0 right-0 bg-black/80 backdrop-blur-sm py-2 flex justify-center items-center gap-2 text-white/70 z-40">
+        <Eye className="w-4 h-4" />
+        <span className="text-sm">{totalViews} visualizações totais</span>
       </div>
     </div>
   );
