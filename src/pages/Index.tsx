@@ -1,10 +1,13 @@
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import VideoFeed from "@/components/VideoFeed";
+import PhotoSlider from "@/components/PhotoSlider";
+import Sidebar from "@/components/Sidebar";
 
 const Index = () => {
   return (
     <div className="min-h-screen bg-background">
+      <Sidebar />
       <Header />
 
       <main>
@@ -17,15 +20,22 @@ const Index = () => {
             <p className="text-2xl md:text-3xl font-serif italic text-foreground/80 mb-8">
               Vlog
             </p>
-            <p className="text-lg md:text-xl leading-relaxed text-foreground/70 max-w-2xl mx-auto">
-              Deslize para ver os meus vídeos
-            </p>
+          </div>
+        </section>
+
+        {/* Photo Slider */}
+        <section className="px-5 md:px-20 pb-8 md:pb-12">
+          <div className="max-w-2xl mx-auto">
+            <PhotoSlider />
           </div>
         </section>
 
         {/* Video Feed */}
         <section className="px-5 md:px-20 pb-8 md:pb-12">
           <div className="max-w-2xl mx-auto">
+            <p className="text-lg md:text-xl leading-relaxed text-foreground/70 text-center mb-6">
+              Deslize para ver os meus vídeos • Clique para curtir ❤️
+            </p>
             <VideoFeed />
           </div>
         </section>
