@@ -1,9 +1,11 @@
 import { useRef, useEffect, useState, useCallback } from "react";
-import { Heart, Eye } from "lucide-react";
+import { Heart, Eye, MessageCircle } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import HeartAnimation from "./HeartAnimation";
+import { formatNumber } from "@/lib/formatNumber";
 
 interface Video {
   id: string;
@@ -15,6 +17,8 @@ interface VideoStats {
   likes: number;
   views: number;
   userLiked: boolean;
+  commentsCount: number;
+  recentViewers: { avatar_url: string | null; username: string | null }[];
 }
 
 const VideoFeed = () => {
@@ -26,6 +30,7 @@ const VideoFeed = () => {
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   // Fetch videos from database
   useEffect(() => {
@@ -63,6 +68,34 @@ const VideoFeed = () => {
         .select("*", { count: "exact", head: true })
         .eq("video_id", video.id);
 
+      const { count: commentsCount } = await supabase
+        .from("video_comments")
+        .select("*", { count: "exact", head: true })
+        .eq("video_id", video.id);
+
+      // Get recent viewers with profiles
+      const { data: recentViews } = await supabase
+        .from("video_views")
+        .select("user_id")
+        .eq("video_id", video.id)
+        .order("created_at", { ascending: false })
+        .limit(3);
+
+      const recentViewers: { avatar_url: string | null; username: string | null }[] = [];
+      if (recentViews) {
+        for (const view of recentViews) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("avatar_url, username")
+            .eq("user_id", view.user_id)
+            .maybeSingle();
+          recentViewers.push({
+            avatar_url: profile?.avatar_url || null,
+            username: profile?.username || null,
+          });
+        }
+      }
+
       let userLiked = false;
       if (user) {
         const { data: likeData } = await supabase
@@ -78,6 +111,8 @@ const VideoFeed = () => {
         likes: likesCount || 0,
         views: viewsCount || 0,
         userLiked,
+        commentsCount: commentsCount || 0,
+        recentViewers,
       };
     }
 
@@ -112,14 +147,12 @@ const VideoFeed = () => {
 
     const stats = videoStats[videoId];
     if (stats?.userLiked) {
-      // Unlike
       await supabase
         .from("video_likes")
         .delete()
         .eq("video_id", videoId)
         .eq("user_id", user.id);
     } else {
-      // Like
       await supabase.from("video_likes").insert({
         video_id: videoId,
         user_id: user.id,
@@ -130,7 +163,7 @@ const VideoFeed = () => {
     fetchStats();
   };
 
-  // Intersection observer for autoplay
+  // Intersection observer for autoplay with proper sound handling
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -139,8 +172,15 @@ const VideoFeed = () => {
           const index = videoRefs.current.indexOf(video);
           
           if (entry.isIntersecting) {
-            video.play().catch(() => {});
+            // Play and unmute the visible video
+            video.currentTime = 0;
             video.muted = false;
+            video.play().catch(() => {
+              // If autoplay fails, try with muted
+              video.muted = true;
+              video.play().catch(() => {});
+            });
+            
             if (index !== -1) {
               setCurrentIndex(index);
               if (videos[index]) {
@@ -148,12 +188,14 @@ const VideoFeed = () => {
               }
             }
           } else {
+            // Pause and mute non-visible videos
             video.pause();
             video.muted = true;
+            video.currentTime = 0;
           }
         });
       },
-      { threshold: 0.6 }
+      { threshold: 0.7 }
     );
 
     videoRefs.current.forEach((video) => {
@@ -196,40 +238,78 @@ const VideoFeed = () => {
             )}
 
             {/* Side Actions - YouTube Shorts Style */}
-            <div className="absolute right-3 bottom-24 flex flex-col items-center gap-6">
+            <div className="absolute right-3 bottom-32 flex flex-col items-center gap-5">
               {/* Like Button */}
               <button
                 onClick={() => handleLike(video.id)}
-                className="flex flex-col items-center gap-1"
+                className="flex flex-col items-center gap-1 group"
               >
-                <div
-                  className={`p-3 rounded-full ${
-                    videoStats[video.id]?.userLiked
-                      ? "bg-transparent"
-                      : "bg-transparent"
-                  } transition-colors`}
-                >
+                <div className="p-3 rounded-full bg-white/10 backdrop-blur-sm group-hover:bg-white/20 transition-all">
                   <Heart
-                    className={`w-8 h-8 ${
+                    className={`w-7 h-7 transition-all ${
                       videoStats[video.id]?.userLiked 
-                        ? "fill-red-500 text-red-500" 
-                        : "text-white"
+                        ? "fill-red-500 text-red-500 scale-110" 
+                        : "text-white group-hover:scale-110"
                     }`}
                   />
                 </div>
-                <span className="text-white text-xs font-semibold">
-                  {videoStats[video.id]?.likes || 0}
+                <span className="text-white text-xs font-bold">
+                  {formatNumber(videoStats[video.id]?.likes || 0)}
                 </span>
               </button>
 
-              {/* Views */}
-              <div className="flex flex-col items-center gap-1">
-                <div className="p-3">
-                  <Eye className="w-8 h-8 text-white" />
+              {/* Comments Button */}
+              <button
+                onClick={() => navigate(`/video/${video.id}/comments`)}
+                className="flex flex-col items-center gap-1 group"
+              >
+                <div className="p-3 rounded-full bg-white/10 backdrop-blur-sm group-hover:bg-white/20 transition-all">
+                  <MessageCircle className="w-7 h-7 text-white group-hover:scale-110 transition-all" />
                 </div>
-                <span className="text-white text-xs font-semibold">
-                  {videoStats[video.id]?.views || 0}
+                <span className="text-white text-xs font-bold">
+                  {formatNumber(videoStats[video.id]?.commentsCount || 0)}
                 </span>
+              </button>
+
+              {/* Views with recent viewers */}
+              <div className="flex flex-col items-center gap-1">
+                <div className="p-3 rounded-full bg-white/10 backdrop-blur-sm">
+                  <Eye className="w-7 h-7 text-white" />
+                </div>
+                <span className="text-white text-xs font-bold">
+                  {formatNumber(videoStats[video.id]?.views || 0)}
+                </span>
+                
+                {/* Recent viewers avatars */}
+                {videoStats[video.id]?.recentViewers && videoStats[video.id].recentViewers.length > 0 && (
+                  <div className="flex items-center mt-1">
+                    <div className="flex -space-x-2">
+                      {videoStats[video.id].recentViewers.slice(0, 3).map((viewer, i) => (
+                        <div
+                          key={i}
+                          className="w-6 h-6 rounded-full border-2 border-black bg-gradient-to-br from-blue-500 to-purple-600 overflow-hidden"
+                        >
+                          {viewer.avatar_url ? (
+                            <img
+                              src={viewer.avatar_url}
+                              alt=""
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-[8px] font-bold text-white">
+                              {(viewer.username || "?")[0].toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {(videoStats[video.id]?.views || 0) > 3 && (
+                      <span className="text-white/70 text-[10px] ml-1">
+                        +{formatNumber((videoStats[video.id]?.views || 0) - 3)}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -251,7 +331,7 @@ const VideoFeed = () => {
       {/* Total views footer */}
       <div className="fixed bottom-0 left-0 right-0 bg-black/80 backdrop-blur-sm py-2 flex justify-center items-center gap-2 text-white/70 z-40">
         <Eye className="w-4 h-4" />
-        <span className="text-sm">{totalViews} visualizações totais</span>
+        <span className="text-sm">{formatNumber(totalViews)} visualizações totais</span>
       </div>
     </div>
   );
