@@ -1,7 +1,9 @@
-import { X, LogIn, LogOut, UserPlus } from "lucide-react";
-import { useState } from "react";
+import { X, LogIn, LogOut, UserPlus, Settings } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -9,56 +11,42 @@ interface SidebarProps {
 }
 
 const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
-  const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const { user, signIn, signUp, signOut } = useAuth();
+  const [isAdmin, setIsAdmin] = useState(false);
+  const { user, signOut } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-
-    try {
-      if (isLogin) {
-        const { error } = await signIn(email, password);
-        if (error) {
-          toast({
-            title: "Erro ao entrar",
-            description: error.message,
-            variant: "destructive",
-          });
-        } else {
-          toast({ title: "Bem-vindo!" });
-          onClose();
-          setEmail("");
-          setPassword("");
-        }
-      } else {
-        const { error } = await signUp(email, password);
-        if (error) {
-          toast({
-            title: "Erro ao criar conta",
-            description: error.message,
-            variant: "destructive",
-          });
-        } else {
-          toast({ title: "Conta criada com sucesso!" });
-          onClose();
-          setEmail("");
-          setPassword("");
-        }
+  useEffect(() => {
+    const checkAdmin = async () => {
+      if (!user) {
+        setIsAdmin(false);
+        return;
       }
-    } finally {
-      setLoading(false);
-    }
-  };
+      const { data } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .eq("role", "admin")
+        .maybeSingle();
+      setIsAdmin(!!data);
+    };
+    checkAdmin();
+  }, [user]);
 
   const handleSignOut = async () => {
     await signOut();
     toast({ title: "Sessão terminada" });
     onClose();
+  };
+
+  const goToAuth = () => {
+    onClose();
+    navigate("/auth");
+  };
+
+  const goToAdmin = () => {
+    onClose();
+    navigate("/admin");
   };
 
   return (
@@ -94,6 +82,17 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
                 <p className="text-sm text-zinc-400">Logado como:</p>
                 <p className="text-white font-medium truncate">{user.email}</p>
               </div>
+              
+              {isAdmin && (
+                <button
+                  onClick={goToAdmin}
+                  className="w-full flex items-center justify-center gap-2 p-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-500 hover:to-blue-400 transition-all"
+                >
+                  <Settings className="w-5 h-5" />
+                  Painel Admin
+                </button>
+              )}
+              
               <button
                 onClick={handleSignOut}
                 className="w-full flex items-center justify-center gap-2 p-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors"
@@ -103,64 +102,21 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
               </button>
             </div>
           ) : (
-            <div>
-              <div className="flex gap-2 mb-6">
-                <button
-                  onClick={() => setIsLogin(true)}
-                  className={`flex-1 flex flex-col items-center gap-1 p-3 rounded-xl transition-colors ${
-                    isLogin
-                      ? "bg-red-600 text-white"
-                      : "bg-white/5 text-zinc-400 hover:bg-white/10"
-                  }`}
-                >
-                  <LogIn className="w-5 h-5" />
-                  <span className="text-sm">Entrar</span>
-                </button>
-                <button
-                  onClick={() => setIsLogin(false)}
-                  className={`flex-1 flex flex-col items-center gap-1 p-3 rounded-xl transition-colors ${
-                    !isLogin
-                      ? "bg-red-600 text-white"
-                      : "bg-white/5 text-zinc-400 hover:bg-white/10"
-                  }`}
-                >
-                  <UserPlus className="w-5 h-5" />
-                  <span className="text-sm">Criar Conta</span>
-                </button>
-              </div>
-
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-2">Email</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className="w-full p-3 border border-white/10 rounded-xl bg-white/5 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                    placeholder="seu@email.com"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-2">Senha</label>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    minLength={6}
-                    className="w-full p-3 border border-white/10 rounded-xl bg-white/5 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                    placeholder="••••••"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full p-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors disabled:opacity-50 font-medium"
-                >
-                  {loading ? "Carregando..." : isLogin ? "Entrar" : "Criar Conta"}
-                </button>
-              </form>
+            <div className="space-y-4">
+              <button
+                onClick={goToAuth}
+                className="w-full flex items-center justify-center gap-2 p-4 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-500 hover:to-blue-400 transition-all shadow-lg shadow-blue-500/20"
+              >
+                <LogIn className="w-5 h-5" />
+                Entrar
+              </button>
+              <button
+                onClick={goToAuth}
+                className="w-full flex items-center justify-center gap-2 p-4 bg-white/5 text-white rounded-xl hover:bg-white/10 transition-colors border border-white/10"
+              >
+                <UserPlus className="w-5 h-5" />
+                Criar Conta
+              </button>
             </div>
           )}
         </div>
