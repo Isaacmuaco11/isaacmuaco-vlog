@@ -1,8 +1,5 @@
 import { useState } from "react";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import VideoFeed from "@/components/VideoFeed";
-import PhotoSlider from "@/components/PhotoSlider";
 import Sidebar from "@/components/Sidebar";
 
 const Index = () => {
@@ -11,22 +8,21 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-black">
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <Header onMenuClick={() => setSidebarOpen(true)} />
+      
+      {/* Menu Button - Facebook Style */}
+      <button
+        onClick={() => setSidebarOpen(true)}
+        className="fixed top-4 left-4 z-50 p-2 rounded-full bg-black/40 backdrop-blur-sm hover:bg-black/60 transition-colors"
+      >
+        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
 
       <main>
-        {/* Video Feed - Full Screen YouTube Shorts Style */}
+        {/* Video Feed - Facebook Reels Style */}
         <VideoFeed />
       </main>
-
-      {/* Photo Slider - Below videos */}
-      <section className="bg-zinc-900 py-8">
-        <div className="max-w-md mx-auto px-4">
-          <h2 className="text-white text-lg font-bold mb-4 text-center">Fotos</h2>
-          <PhotoSlider />
-        </div>
-      </section>
-
-      <Footer />
     </div>
   );
 };

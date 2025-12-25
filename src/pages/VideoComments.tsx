@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Heart, Trash2, Send } from "lucide-react";
+import { ArrowLeft, Heart, Trash2, Send, MessageCircle, CornerDownRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -13,6 +13,7 @@ interface Comment {
   content: string;
   created_at: string;
   user_id: string;
+  parent_id: string | null;
   profile?: {
     display_name: string | null;
     username: string | null;
@@ -20,6 +21,7 @@ interface Comment {
   };
   likes_count: number;
   user_liked: boolean;
+  replies?: Comment[];
 }
 
 interface Video {
@@ -38,6 +40,8 @@ const VideoComments = () => {
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<{ id: string; username: string } | null>(null);
+  const [expandedReplies, setExpandedReplies] = useState<Set<string>>(new Set());
 
   const fetchComments = async () => {
     if (!videoId) return;
@@ -56,6 +60,7 @@ const VideoComments = () => {
 
     setVideo(videoData);
 
+    // Fetch all comments including replies
     const { data: commentsData } = await supabase
       .from("video_comments")
       .select("*")
@@ -96,7 +101,18 @@ const VideoComments = () => {
         })
       );
 
-      setComments(commentsWithDetails);
+      // Organize comments into threads
+      const parentComments = commentsWithDetails.filter(c => !c.parent_id);
+      const replies = commentsWithDetails.filter(c => c.parent_id);
+
+      const threaded = parentComments.map(parent => ({
+        ...parent,
+        replies: replies.filter(r => r.parent_id === parent.id).sort(
+          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        ),
+      }));
+
+      setComments(threaded);
     }
 
     setLoading(false);
@@ -120,12 +136,14 @@ const VideoComments = () => {
       video_id: videoId,
       user_id: user.id,
       content: newComment.trim(),
+      parent_id: replyingTo?.id || null,
     });
 
     if (error) {
       toast({ title: "Erro ao comentar", variant: "destructive" });
     } else {
       setNewComment("");
+      setReplyingTo(null);
       fetchComments();
     }
 
@@ -167,10 +185,137 @@ const VideoComments = () => {
     }
   };
 
+  const toggleReplies = (commentId: string) => {
+    const newExpanded = new Set(expandedReplies);
+    if (newExpanded.has(commentId)) {
+      newExpanded.delete(commentId);
+    } else {
+      newExpanded.add(commentId);
+    }
+    setExpandedReplies(newExpanded);
+  };
+
+  const renderComment = (comment: Comment, isReply = false) => (
+    <div 
+      key={comment.id} 
+      className={`p-4 hover:bg-zinc-900/50 transition-colors ${isReply ? 'ml-12 border-l-2 border-zinc-800' : ''}`}
+    >
+      <div className="flex gap-3">
+        {/* Avatar */}
+        <button
+          onClick={() => comment.profile?.username && navigate(`/@${comment.profile.username}`)}
+          className="flex-shrink-0"
+        >
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 p-0.5">
+            <div className="w-full h-full rounded-full bg-zinc-900 overflow-hidden flex items-center justify-center">
+              {comment.profile?.avatar_url ? (
+                <img
+                  src={comment.profile.avatar_url}
+                  alt="Avatar"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="text-sm font-bold text-zinc-400">
+                  {(comment.profile?.display_name || comment.profile?.username || "?")[0].toUpperCase()}
+                </span>
+              )}
+            </div>
+          </div>
+        </button>
+
+        {/* Content */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => comment.profile?.username && navigate(`/@${comment.profile.username}`)}
+              className="font-bold text-white hover:underline text-sm"
+            >
+              {comment.profile?.display_name || comment.profile?.username || "Usuário"}
+            </button>
+            <span className="text-zinc-500 text-sm">
+              @{comment.profile?.username || "user"}
+            </span>
+            <span className="text-zinc-600">·</span>
+            <span className="text-zinc-500 text-sm">
+              {formatDistanceToNow(new Date(comment.created_at), {
+                addSuffix: true,
+                locale: ptBR,
+              })}
+            </span>
+          </div>
+
+          <p className="text-white whitespace-pre-wrap break-words mt-1 text-[15px] leading-relaxed">
+            {comment.content}
+          </p>
+
+          {/* Actions */}
+          <div className="flex items-center gap-4 mt-3">
+            {/* Like */}
+            <button
+              onClick={() => handleLikeComment(comment.id, comment.user_liked)}
+              className="flex items-center gap-1.5 group"
+            >
+              <Heart
+                className={`w-4 h-4 transition-all ${
+                  comment.user_liked
+                    ? "fill-red-500 text-red-500"
+                    : "text-zinc-500 group-hover:text-red-500"
+                }`}
+              />
+              {comment.likes_count > 0 && (
+                <span
+                  className={`text-sm ${
+                    comment.user_liked ? "text-red-500" : "text-zinc-500"
+                  }`}
+                >
+                  {formatNumber(comment.likes_count)}
+                </span>
+              )}
+            </button>
+
+            {/* Reply */}
+            {!isReply && (
+              <button
+                onClick={() => setReplyingTo({ id: comment.id, username: comment.profile?.username || "user" })}
+                className="flex items-center gap-1.5 text-zinc-500 hover:text-blue-500 transition-colors"
+              >
+                <MessageCircle className="w-4 h-4" />
+                <span className="text-sm">Responder</span>
+              </button>
+            )}
+
+            {/* Delete */}
+            {user?.id === comment.user_id && (
+              <button
+                onClick={() => handleDeleteComment(comment.id)}
+                className="flex items-center gap-1.5 text-zinc-500 hover:text-red-500 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Replies Toggle */}
+          {!isReply && comment.replies && comment.replies.length > 0 && (
+            <button
+              onClick={() => toggleReplies(comment.id)}
+              className="flex items-center gap-2 mt-3 text-blue-500 hover:text-blue-400 transition-colors text-sm"
+            >
+              <CornerDownRight className="w-4 h-4" />
+              {expandedReplies.has(comment.id) 
+                ? "Ocultar respostas" 
+                : `Ver ${comment.replies.length} resposta${comment.replies.length > 1 ? 's' : ''}`}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin" />
+        <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -178,117 +323,42 @@ const VideoComments = () => {
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-black border-b border-white/10">
+      <div className="sticky top-0 z-10 bg-black/95 backdrop-blur-sm border-b border-zinc-800">
         <div className="flex items-center gap-4 px-4 py-3">
           <button
             onClick={() => navigate("/")}
-            className="p-2 hover:bg-white/10 rounded-full transition-colors"
+            className="p-2 hover:bg-zinc-800 rounded-full transition-colors"
           >
-            <ArrowLeft className="w-6 h-6" />
+            <ArrowLeft className="w-5 h-5" />
           </button>
-          <div>
+          <div className="flex-1">
             <h1 className="font-bold text-lg">Comentários</h1>
-            <p className="text-sm text-zinc-400">{comments.length} comentários</p>
+            <p className="text-sm text-zinc-500">
+              {comments.reduce((acc, c) => acc + 1 + (c.replies?.length || 0), 0)} comentários
+            </p>
           </div>
         </div>
       </div>
 
       {/* Comments List */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto pb-20">
         {comments.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-zinc-400">
-            <p className="text-lg mb-2">Nenhum comentário ainda</p>
+          <div className="flex flex-col items-center justify-center py-20 text-zinc-500">
+            <MessageCircle className="w-16 h-16 mb-4 opacity-50" />
+            <p className="text-lg font-medium mb-1">Nenhum comentário ainda</p>
             <p className="text-sm">Seja o primeiro a comentar!</p>
           </div>
         ) : (
-          <div className="divide-y divide-white/10">
+          <div className="divide-y divide-zinc-800/50">
             {comments.map((comment) => (
-              <div key={comment.id} className="p-4 hover:bg-white/5 transition-colors">
-                <div className="flex gap-3">
-                  {/* Avatar */}
-                  <button
-                    onClick={() => comment.profile?.username && navigate(`/@${comment.profile.username}`)}
-                    className="flex-shrink-0"
-                  >
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 p-0.5">
-                      <div className="w-full h-full rounded-full bg-zinc-800 overflow-hidden flex items-center justify-center">
-                        {comment.profile?.avatar_url ? (
-                          <img
-                            src={comment.profile.avatar_url}
-                            alt="Avatar"
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <span className="text-sm font-bold text-zinc-400">
-                            {(comment.profile?.display_name || comment.profile?.username || "?")[0].toUpperCase()}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <button
-                        onClick={() => comment.profile?.username && navigate(`/@${comment.profile.username}`)}
-                        className="font-bold hover:underline"
-                      >
-                        {comment.profile?.display_name || comment.profile?.username || "Usuário"}
-                      </button>
-                      <span className="text-zinc-500 text-sm">
-                        @{comment.profile?.username || "user"}
-                      </span>
-                      <span className="text-zinc-500 text-sm">·</span>
-                      <span className="text-zinc-500 text-sm">
-                        {formatDistanceToNow(new Date(comment.created_at), {
-                          addSuffix: true,
-                          locale: ptBR,
-                        })}
-                      </span>
-                    </div>
-
-                    <p className="text-white whitespace-pre-wrap break-words mb-3">
-                      {comment.content}
-                    </p>
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-6">
-                      <button
-                        onClick={() => handleLikeComment(comment.id, comment.user_liked)}
-                        className="flex items-center gap-2 group"
-                      >
-                        <div className="p-2 rounded-full group-hover:bg-pink-500/10 transition-colors">
-                          <Heart
-                            className={`w-4 h-4 ${
-                              comment.user_liked
-                                ? "fill-pink-500 text-pink-500"
-                                : "text-zinc-500 group-hover:text-pink-500"
-                            } transition-colors`}
-                          />
-                        </div>
-                        <span
-                          className={`text-sm ${
-                            comment.user_liked ? "text-pink-500" : "text-zinc-500"
-                          }`}
-                        >
-                          {comment.likes_count > 0 && formatNumber(comment.likes_count)}
-                        </span>
-                      </button>
-
-                      {user?.id === comment.user_id && (
-                        <button
-                          onClick={() => handleDeleteComment(comment.id)}
-                          className="flex items-center gap-2 group"
-                        >
-                          <div className="p-2 rounded-full group-hover:bg-red-500/10 transition-colors">
-                            <Trash2 className="w-4 h-4 text-zinc-500 group-hover:text-red-500 transition-colors" />
-                          </div>
-                        </button>
-                      )}
-                    </div>
+              <div key={comment.id}>
+                {renderComment(comment)}
+                {/* Render replies if expanded */}
+                {expandedReplies.has(comment.id) && comment.replies && (
+                  <div className="bg-zinc-900/30">
+                    {comment.replies.map((reply) => renderComment(reply, true))}
                   </div>
-                </div>
+                )}
               </div>
             ))}
           </div>
@@ -296,28 +366,44 @@ const VideoComments = () => {
       </div>
 
       {/* Comment Input */}
-      <div className="sticky bottom-0 bg-black border-t border-white/10 p-4">
-        <form onSubmit={handleSubmitComment} className="flex gap-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 p-0.5 flex-shrink-0">
-            <div className="w-full h-full rounded-full bg-zinc-800 overflow-hidden flex items-center justify-center">
-              <span className="text-sm font-bold text-zinc-400">
+      <div className="fixed bottom-0 left-0 right-0 bg-black border-t border-zinc-800 p-3 safe-area-inset-bottom">
+        {replyingTo && (
+          <div className="flex items-center gap-2 mb-2 px-2 py-1 bg-zinc-900 rounded-lg">
+            <span className="text-sm text-zinc-400">
+              Respondendo a <span className="text-blue-500">@{replyingTo.username}</span>
+            </span>
+            <button
+              onClick={() => setReplyingTo(null)}
+              className="ml-auto text-zinc-500 hover:text-white text-sm"
+            >
+              Cancelar
+            </button>
+          </div>
+        )}
+        
+        <form onSubmit={handleSubmitComment} className="flex gap-3 items-center">
+          {/* User Avatar */}
+          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 p-0.5 flex-shrink-0">
+            <div className="w-full h-full rounded-full bg-zinc-900 overflow-hidden flex items-center justify-center">
+              <span className="text-xs font-bold text-white">
                 {user?.email?.[0].toUpperCase() || "?"}
               </span>
             </div>
           </div>
+          
           <div className="flex-1 flex gap-2">
             <input
               type="text"
               value={newComment}
               onChange={(e) => setNewComment(e.target.value)}
-              placeholder={user ? "Escreva um comentário..." : "Faça login para comentar"}
+              placeholder={user ? (replyingTo ? "Escreva uma resposta..." : "Adicionar comentário...") : "Faça login para comentar"}
               disabled={!user}
-              className="flex-1 bg-white/5 border border-white/10 rounded-full px-4 py-2 text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 disabled:opacity-50"
+              className="flex-1 bg-zinc-900 border border-zinc-700 rounded-full px-4 py-2.5 text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-50 text-sm"
             />
             <button
               type="submit"
               disabled={!user || !newComment.trim() || submitting}
-              className="p-3 bg-blue-500 rounded-full hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-2.5 bg-blue-500 rounded-full hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {submitting ? (
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
