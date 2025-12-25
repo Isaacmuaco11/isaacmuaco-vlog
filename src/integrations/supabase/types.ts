@@ -43,30 +43,60 @@ export type Database = {
           },
         ]
       }
+      followers: {
+        Row: {
+          created_at: string
+          follower_id: string
+          following_id: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          follower_id: string
+          following_id: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          follower_id?: string
+          following_id?: string
+          id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
+          bio: string | null
+          cover_url: string | null
           created_at: string
           display_name: string | null
           id: string
+          is_verified: boolean | null
           updated_at: string
           user_id: string
           username: string | null
         }
         Insert: {
           avatar_url?: string | null
+          bio?: string | null
+          cover_url?: string | null
           created_at?: string
           display_name?: string | null
           id?: string
+          is_verified?: boolean | null
           updated_at?: string
           user_id: string
           username?: string | null
         }
         Update: {
           avatar_url?: string | null
+          bio?: string | null
+          cover_url?: string | null
           created_at?: string
           display_name?: string | null
           id?: string
+          is_verified?: boolean | null
           updated_at?: string
           user_id?: string
           username?: string | null
@@ -231,18 +261,21 @@ export type Database = {
           created_at: string
           id: string
           title: string | null
+          user_id: string | null
           video_url: string
         }
         Insert: {
           created_at?: string
           id?: string
           title?: string | null
+          user_id?: string | null
           video_url: string
         }
         Update: {
           created_at?: string
           id?: string
           title?: string | null
+          user_id?: string | null
           video_url?: string
         }
         Relationships: []

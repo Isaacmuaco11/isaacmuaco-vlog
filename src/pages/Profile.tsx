@@ -1,16 +1,21 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Camera, Edit2, Check, X } from "lucide-react";
+import { ArrowLeft, Camera, MoreHorizontal, Grid, Film, Image, UserPlus, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { formatNumber } from "@/lib/formatNumber";
+import VerifiedBadge from "@/assets/verified-badge.svg";
 
-interface Profile {
+interface ProfileData {
   id: string;
   user_id: string;
   display_name: string | null;
   username: string | null;
   avatar_url: string | null;
+  cover_url: string | null;
+  bio: string | null;
+  is_verified: boolean;
 }
 
 const Profile = () => {
@@ -18,216 +23,171 @@ const Profile = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const [profile, setProfile] = useState<Profile | null>(null);
+  
+  const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(false);
-  const [editName, setEditName] = useState("");
+  const [followersCount, setFollowersCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [activeTab, setActiveTab] = useState("reels");
   const [uploading, setUploading] = useState(false);
-  const [isOwnProfile, setIsOwnProfile] = useState(false);
+  const [videos, setVideos] = useState<any[]>([]);
+  
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+
+  const isOwnProfile = user && profile && user.id === profile.user_id;
 
   useEffect(() => {
     const fetchProfile = async () => {
       if (!username) return;
+      const cleanUsername = username.replace('@', '');
       
-      const { data, error } = await supabase
+      const { data: profileData } = await supabase
         .from("profiles")
         .select("*")
-        .eq("username", username)
+        .eq("username", cleanUsername)
         .maybeSingle();
 
-      if (error || !data) {
-        toast({ title: "Perfil não encontrado", variant: "destructive" });
+      if (!profileData) {
         navigate("/");
         return;
       }
 
-      setProfile(data);
-      setEditName(data.display_name || "");
-      setIsOwnProfile(user?.id === data.user_id);
+      setProfile(profileData);
+
+      const { count: followers } = await supabase.from("followers").select("*", { count: "exact", head: true }).eq("following_id", profileData.user_id);
+      const { count: following } = await supabase.from("followers").select("*", { count: "exact", head: true }).eq("follower_id", profileData.user_id);
+      setFollowersCount(followers || 0);
+      setFollowingCount(following || 0);
+
+      if (user) {
+        const { data: followData } = await supabase.from("followers").select("id").eq("follower_id", user.id).eq("following_id", profileData.user_id).maybeSingle();
+        setIsFollowing(!!followData);
+      }
+
+      const { data: videosData } = await supabase.from("videos").select("*").eq("user_id", profileData.user_id).order("created_at", { ascending: false });
+      setVideos(videosData || []);
       setLoading(false);
     };
-
     fetchProfile();
-  }, [username, user, navigate, toast]);
+  }, [username, user]);
 
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFollow = async () => {
+    if (!user || !profile) return;
+    if (isFollowing) {
+      await supabase.from("followers").delete().eq("follower_id", user.id).eq("following_id", profile.user_id);
+    } else {
+      await supabase.from("followers").insert({ follower_id: user.id, following_id: profile.user_id });
+    }
+    setIsFollowing(!isFollowing);
+    setFollowersCount(prev => isFollowing ? prev - 1 : prev + 1);
+  };
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'avatar' | 'cover' | 'video') => {
     const file = e.target.files?.[0];
-    if (!file || !profile || !isOwnProfile) return;
-
+    if (!file || !user) return;
     setUploading(true);
-
-    const fileExt = file.name.split(".").pop();
-    const filePath = `${user!.id}/${Date.now()}.${fileExt}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from("avatars")
-      .upload(filePath, file, { upsert: true });
-
-    if (uploadError) {
-      toast({ title: "Erro ao enviar foto", variant: "destructive" });
-      setUploading(false);
-      return;
-    }
-
-    const { data: publicUrl } = supabase.storage
-      .from("avatars")
-      .getPublicUrl(filePath);
-
-    const { error: updateError } = await supabase
-      .from("profiles")
-      .update({ avatar_url: publicUrl.publicUrl })
-      .eq("user_id", user!.id);
-
-    if (updateError) {
-      toast({ title: "Erro ao atualizar perfil", variant: "destructive" });
+    const bucket = type === 'avatar' ? 'avatars' : type === 'cover' ? 'covers' : 'user-videos';
+    const filePath = `${user.id}/${type === 'video' ? Date.now() : type}.${file.name.split('.').pop()}`;
+    
+    await supabase.storage.from(bucket).upload(filePath, file, { upsert: true });
+    const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(filePath);
+    
+    if (type === 'video') {
+      await supabase.from('videos').insert({ video_url: urlData.publicUrl, title: file.name, user_id: user.id });
     } else {
-      setProfile({ ...profile, avatar_url: publicUrl.publicUrl });
-      toast({ title: "Foto atualizada!" });
+      await supabase.from('profiles').update({ [type === 'avatar' ? 'avatar_url' : 'cover_url']: urlData.publicUrl }).eq('user_id', user.id);
     }
-
     setUploading(false);
+    window.location.reload();
   };
 
-  const handleSaveName = async () => {
-    if (!profile || !isOwnProfile) return;
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({ display_name: editName })
-      .eq("user_id", user!.id);
-
-    if (error) {
-      toast({ title: "Erro ao atualizar nome", variant: "destructive" });
-    } else {
-      setProfile({ ...profile, display_name: editName });
-      setEditing(false);
-      toast({ title: "Nome atualizado!" });
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+  if (loading) return <div className="min-h-screen bg-zinc-900 flex items-center justify-center"><div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /></div>;
+  if (!profile) return null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-zinc-900 to-black text-white">
-      {/* Header */}
-      <div className="sticky top-0 z-10 bg-black/80 backdrop-blur-lg border-b border-white/10">
-        <div className="flex items-center gap-4 px-4 py-3">
-          <button
-            onClick={() => navigate("/")}
-            className="p-2 hover:bg-white/10 rounded-full transition-colors"
-          >
-            <ArrowLeft className="w-6 h-6" />
-          </button>
-          <div>
-            <h1 className="font-bold text-lg">{profile?.display_name || profile?.username}</h1>
-            <p className="text-sm text-zinc-400">@{profile?.username}</p>
+    <div className="min-h-screen bg-zinc-900 text-white">
+      <input type="file" ref={avatarInputRef} className="hidden" accept="image/*" onChange={(e) => handleUpload(e, 'avatar')} />
+      <input type="file" ref={coverInputRef} className="hidden" accept="image/*" onChange={(e) => handleUpload(e, 'cover')} />
+      <input type="file" ref={videoInputRef} className="hidden" accept="video/*" onChange={(e) => handleUpload(e, 'video')} />
+
+      <div className="sticky top-0 z-50 bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800">
+        <div className="flex items-center justify-between px-4 py-3">
+          <button onClick={() => navigate(-1)} className="p-2 hover:bg-zinc-800 rounded-full"><ArrowLeft className="w-5 h-5" /></button>
+          <div className="flex items-center gap-2">
+            <span className="font-bold">{profile.display_name || profile.username}</span>
+            {profile.is_verified && <img src={VerifiedBadge} alt="Verified" className="w-5 h-5" />}
           </div>
+          <div className="w-9" />
         </div>
       </div>
 
-      {/* Profile Content */}
-      <div className="px-4 py-8">
-        <div className="flex flex-col items-center">
-          {/* Avatar */}
-          <div className="relative mb-6">
-            <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 p-1">
-              <div className="w-full h-full rounded-full bg-zinc-800 overflow-hidden flex items-center justify-center">
-                {profile?.avatar_url ? (
-                  <img
-                    src={profile.avatar_url}
-                    alt="Avatar"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span className="text-4xl font-bold text-zinc-400">
-                    {(profile?.display_name || profile?.username || "?")[0].toUpperCase()}
-                  </span>
-                )}
-              </div>
-            </div>
-            {isOwnProfile && (
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
-                className="absolute bottom-0 right-0 p-2 bg-blue-500 rounded-full hover:bg-blue-600 transition-colors shadow-lg"
-              >
-                {uploading ? (
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <Camera className="w-5 h-5" />
-                )}
+      <div className="relative h-48 bg-gradient-to-br from-zinc-700 to-zinc-800">
+        {profile.cover_url && <img src={profile.cover_url} alt="Cover" className="w-full h-full object-cover" />}
+        {isOwnProfile && <button onClick={() => coverInputRef.current?.click()} className="absolute bottom-3 right-3 p-2 bg-zinc-900/80 rounded-full"><Camera className="w-5 h-5" /></button>}
+      </div>
+
+      <div className="px-4 pb-4 -mt-16 relative">
+        <div className="relative inline-block">
+          <div className="w-32 h-32 rounded-full border-4 border-blue-500 bg-zinc-800 overflow-hidden">
+            {profile.avatar_url ? <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-4xl font-bold text-zinc-400">{(profile.display_name || profile.username || "?")[0].toUpperCase()}</div>}
+          </div>
+          {isOwnProfile && <button onClick={() => avatarInputRef.current?.click()} className="absolute bottom-2 right-2 p-2 bg-zinc-800 rounded-full border-2 border-zinc-900"><Camera className="w-4 h-4" /></button>}
+          {profile.is_verified && <div className="absolute bottom-0 left-0 p-1 bg-zinc-900 rounded-full"><img src={VerifiedBadge} alt="Verified" className="w-6 h-6" /></div>}
+        </div>
+
+        <div className="mt-3">
+          <div className="flex items-center gap-2"><h1 className="text-2xl font-bold">{profile.display_name || profile.username}</h1>{profile.is_verified && <img src={VerifiedBadge} alt="Verified" className="w-6 h-6" />}</div>
+          <div className="flex items-center gap-4 mt-2 text-sm">
+            <span><span className="font-bold">{formatNumber(followersCount)}</span><span className="text-zinc-400 ml-1">seguidores</span></span>
+            <span className="text-zinc-600">·</span>
+            <span><span className="font-bold">{formatNumber(followingCount)}</span><span className="text-zinc-400 ml-1">a seguir</span></span>
+          </div>
+        </div>
+
+        <div className="flex gap-2 mt-4">
+          {isOwnProfile ? (
+            <>
+              <button onClick={() => videoInputRef.current?.click()} className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg">+ Publicar vídeo</button>
+              <button className="p-2.5 bg-zinc-700 hover:bg-zinc-600 rounded-lg"><MoreHorizontal className="w-5 h-5" /></button>
+            </>
+          ) : (
+            <>
+              <button onClick={handleFollow} className={`flex-1 flex items-center justify-center gap-2 font-bold py-2.5 rounded-lg ${isFollowing ? "bg-zinc-700 hover:bg-zinc-600" : "bg-blue-600 hover:bg-blue-700"}`}>
+                {isFollowing ? <><Check className="w-5 h-5" />A seguir</> : <><UserPlus className="w-5 h-5" />Seguir</>}
               </button>
-            )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleAvatarUpload}
-              className="hidden"
-            />
-          </div>
-
-          {/* Name */}
-          <div className="flex items-center gap-2 mb-2">
-            {editing ? (
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-center text-lg font-bold focus:outline-none focus:border-blue-500"
-                  autoFocus
-                />
-                <button
-                  onClick={handleSaveName}
-                  className="p-2 bg-green-500 rounded-full hover:bg-green-600 transition-colors"
-                >
-                  <Check className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => {
-                    setEditing(false);
-                    setEditName(profile?.display_name || "");
-                  }}
-                  className="p-2 bg-red-500 rounded-full hover:bg-red-600 transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            ) : (
-              <>
-                <h2 className="text-2xl font-bold">{profile?.display_name || profile?.username}</h2>
-                {isOwnProfile && (
-                  <button
-                    onClick={() => setEditing(true)}
-                    className="p-2 hover:bg-white/10 rounded-full transition-colors"
-                  >
-                    <Edit2 className="w-4 h-4 text-zinc-400" />
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-
-          <p className="text-zinc-400">@{profile?.username}</p>
-
-          {/* Profile URL */}
-          <div className="mt-6 p-4 bg-white/5 rounded-xl border border-white/10 w-full max-w-md">
-            <p className="text-sm text-zinc-400 mb-1">Link do perfil:</p>
-            <p className="text-blue-400 font-mono text-sm break-all">
-              {window.location.origin}/@{profile?.username}
-            </p>
-          </div>
+              <button className="flex-1 bg-zinc-700 hover:bg-zinc-600 font-bold py-2.5 rounded-lg">Mensagem</button>
+            </>
+          )}
         </div>
       </div>
+
+      <div className="border-b border-zinc-800 flex">
+        {["publications", "about", "reels", "photos"].map((tab) => (
+          <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 py-4 text-sm font-medium relative ${activeTab === tab ? "text-blue-500" : "text-zinc-400"}`}>
+            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            {activeTab === tab && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500" />}
+          </button>
+        ))}
+      </div>
+
+      <div className="p-4">
+        {activeTab === "reels" && (
+          <div className="grid grid-cols-3 gap-1">
+            {videos.map((video) => (
+              <div key={video.id} className="aspect-[9/16] bg-zinc-800 rounded-lg overflow-hidden">
+                <video src={video.video_url} className="w-full h-full object-cover" muted playsInline />
+              </div>
+            ))}
+            {videos.length === 0 && <div className="col-span-3 text-center py-10 text-zinc-500"><Film className="w-12 h-12 mx-auto mb-2 opacity-50" /><p>Nenhum vídeo ainda</p></div>}
+          </div>
+        )}
+        {activeTab !== "reels" && <div className="text-center py-10 text-zinc-500"><Grid className="w-12 h-12 mx-auto mb-2 opacity-50" /><p>Nenhum conteúdo ainda</p></div>}
+      </div>
+
+      {uploading && <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50"><div className="w-12 h-12 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /></div>}
     </div>
   );
 };

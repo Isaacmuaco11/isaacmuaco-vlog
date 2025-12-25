@@ -9,6 +9,7 @@ import Auth from "./pages/Auth";
 import Admin from "./pages/Admin";
 import Profile from "./pages/Profile";
 import VideoComments from "./pages/VideoComments";
+import Explore from "./pages/Explore";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -45,6 +46,10 @@ const router = createBrowserRouter([
       {
         path: "/video/:videoId/comments",
         element: <VideoComments />,
+      },
+      {
+        path: "/explore",
+        element: <Explore />,
       },
       {
         path: "*",

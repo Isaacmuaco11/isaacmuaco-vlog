@@ -1,9 +1,10 @@
-import { X, LogIn, LogOut, UserPlus, Settings, User } from "lucide-react";
+import { X, LogIn, LogOut, UserPlus, Settings, User, Search, Users } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import VerifiedBadge from "@/assets/verified-badge.svg";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -12,7 +13,7 @@ interface SidebarProps {
 
 const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
   const [isAdmin, setIsAdmin] = useState(false);
-  const [profile, setProfile] = useState<{ username: string | null; avatar_url: string | null } | null>(null);
+  const [profile, setProfile] = useState<{ username: string | null; avatar_url: string | null; is_verified?: boolean } | null>(null);
   const { user, signOut } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -35,7 +36,7 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
 
       const { data: profileData } = await supabase
         .from("profiles")
-        .select("username, avatar_url")
+        .select("username, avatar_url, is_verified")
         .eq("user_id", user.id)
         .maybeSingle();
       setProfile(profileData);
@@ -57,6 +58,11 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
   const goToAdmin = () => {
     onClose();
     navigate("/admin");
+  };
+
+  const goToExplore = () => {
+    onClose();
+    navigate("/explore");
   };
 
   const goToProfile = () => {
@@ -114,7 +120,12 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
                     </div>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-white font-medium truncate">{user.email}</p>
+                    <div className="flex items-center gap-1">
+                      <p className="text-white font-medium truncate">{user.email}</p>
+                      {profile?.is_verified && (
+                        <img src={VerifiedBadge} alt="Verified" className="w-4 h-4" />
+                      )}
+                    </div>
                     {profile?.username && (
                       <p className="text-sm text-zinc-400">@{profile.username}</p>
                     )}
@@ -129,6 +140,15 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
               >
                 <User className="w-5 h-5" />
                 Meu Perfil
+              </button>
+
+              {/* Explore Button */}
+              <button
+                onClick={goToExplore}
+                className="w-full flex items-center justify-center gap-2 p-3 bg-gradient-to-r from-green-600 to-teal-500 text-white rounded-xl hover:from-green-500 hover:to-teal-400 transition-all"
+              >
+                <Users className="w-5 h-5" />
+                Explorar Pessoas
               </button>
               
               {isAdmin && (
