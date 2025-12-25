@@ -99,6 +99,7 @@ export type Database = {
           content: string
           created_at: string
           id: string
+          parent_id: string | null
           updated_at: string
           user_id: string
           video_id: string
@@ -107,6 +108,7 @@ export type Database = {
           content: string
           created_at?: string
           id?: string
+          parent_id?: string | null
           updated_at?: string
           user_id: string
           video_id: string
@@ -115,11 +117,19 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
+          parent_id?: string | null
           updated_at?: string
           user_id?: string
           video_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "video_comments_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "video_comments"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "video_comments_video_id_fkey"
             columns: ["video_id"]
@@ -151,6 +161,35 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "video_likes_video_id_fkey"
+            columns: ["video_id"]
+            isOneToOne: false
+            referencedRelation: "videos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      video_shares: {
+        Row: {
+          created_at: string
+          id: string
+          user_id: string
+          video_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          user_id: string
+          video_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          user_id?: string
+          video_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "video_shares_video_id_fkey"
             columns: ["video_id"]
             isOneToOne: false
             referencedRelation: "videos"
